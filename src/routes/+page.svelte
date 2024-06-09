@@ -1,11 +1,17 @@
 <script lang="ts">
   import { readText } from "@tauri-apps/api/clipboard";
+  import type { UnlistenFn } from "@tauri-apps/api/event";
   import { unregisterAll, register } from "@tauri-apps/api/globalShortcut";
   import { invoke } from "@tauri-apps/api/tauri";
-  import { onMount } from "svelte";
+  import { onDestroy, onMount } from "svelte";
+  import { onTextUpdate, startListening } from "tauri-plugin-clipboard-api";
 
   let name = "";
   let greetMsg = "";
+
+  let unlistenTextUpdate: UnlistenFn;
+  let unlistenClipboard: UnlistenFn;
+  let clipBoardText;
 
   async function greet() {
     // Learn more about Tauri commands at https://tauri.app/v1/guides/features/command
@@ -13,14 +19,19 @@
   }
 
   onMount(async () => {
-    // 全ショートカットの解除
     await unregisterAll();
 
-    // ショートカットの設定
-    await register("CommandOrControl+C", async () => {
-      const clipboardText = await readText();
-      greetMsg = await invoke("handle_copy", { text: clipboardText });
+    unlistenTextUpdate = await onTextUpdate(async (newText) => {
+      clipBoardText = newText;
+
+      greetMsg = await invoke("handle_copy", { text: clipBoardText });
     });
+    unlistenClipboard = await startListening();
+  });
+
+  onDestroy(() => {
+    if (unlistenTextUpdate) unlistenTextUpdate();
+    if (unlistenClipboard) unlistenClipboard();
   });
 </script>
 

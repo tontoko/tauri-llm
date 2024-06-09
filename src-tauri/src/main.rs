@@ -70,6 +70,7 @@ fn main() {
     env::set_var("OPENAI_API_KEY", "ollama");
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_clipboard::init())
         .invoke_handler(tauri::generate_handler![greet, handle_copy])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

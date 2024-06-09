@@ -19,6 +19,7 @@ tokio = { version = "1.38.0", features = ["full"] }
 anyhow = "1.0.86"
 xcap = "0.0.10"
 base64 = "0.22.1"
+tauri-plugin-clipboard = "1.0.1"
 
 [features]
 # This feature is used for production builds or when a dev server is not specified, DO NOT REMOVE!!
