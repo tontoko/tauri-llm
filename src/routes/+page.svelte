@@ -1,7 +1,6 @@
 <script lang="ts">
-  import { readText } from "@tauri-apps/api/clipboard";
   import type { UnlistenFn } from "@tauri-apps/api/event";
-  import { unregisterAll, register } from "@tauri-apps/api/globalShortcut";
+  import { unregisterAll } from "@tauri-apps/api/globalShortcut";
   import { invoke } from "@tauri-apps/api/tauri";
   import { onDestroy, onMount } from "svelte";
   import { onTextUpdate, startListening } from "tauri-plugin-clipboard-api";
