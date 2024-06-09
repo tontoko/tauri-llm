@@ -14,7 +14,8 @@
   "license": "MIT",
   "dependencies": {
     "@tauri-apps/api": "^1",
-    "tauri-plugin-clipboard-api": "^1.0.1"
+    "tauri-plugin-clipboard-api": "^1.0.1",
+    "tauri-plugin-store-api": "https://github.com/tauri-apps/tauri-plugin-store#v1"
   },
   "devDependencies": {
     "@sveltejs/adapter-static": "^3.0.1",

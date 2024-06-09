@@ -5,9 +5,34 @@ use base64::{engine::general_purpose, Engine as _};
 use ollama_rs::generation::completion::request::GenerationRequest;
 use ollama_rs::generation::images::Image;
 use ollama_rs::Ollama;
-use std::env;
+use serde_json::{json, Value};
 use std::io::Cursor;
+use std::{collections::HashMap, env};
+use tauri_plugin_store::StoreBuilder;
 use xcap::{image, Monitor};
+
+use tauri_plugin_store::Store;
+
+#[derive(Debug, Clone)]
+pub struct ClipboardHistory {
+    pub text_with_related_tags: HashMap<String, Vec<Value>>,
+}
+
+impl ClipboardHistory {
+    pub fn load_from_store<R: tauri::Runtime>(
+        store: &Store<R>,
+    ) -> Result<Self, Box<dyn std::error::Error>> {
+        let text_with_related_tags: HashMap<String, Vec<Value>> = store
+            .get("clipboardHistory.text_with_related_tags")
+            .and_then(|v| v.as_object().cloned())
+            .and_then(|obj| serde_json::from_value(serde_json::Value::Object(obj)).ok())
+            .unwrap_or_default();
+
+        Ok(ClipboardHistory {
+            text_with_related_tags,
+        })
+    }
+}
 
 // Learn more about Tauri commands at https://tauri.app/v1/guides/features/command
 #[tauri::command]
@@ -29,7 +54,7 @@ async fn greet(name: &str) -> Result<String, ()> {
 }
 
 #[tauri::command]
-async fn handle_copy(text: &str) -> Result<String, ()> {
+async fn handle_copy(text: &str, app_handle: tauri::AppHandle) -> Result<String, String> {
     let monitors = Monitor::all().unwrap();
 
     let mut images = Vec::new();
@@ -50,27 +75,54 @@ async fn handle_copy(text: &str) -> Result<String, ()> {
     let ollama = Ollama::default();
 
     let model = "llava-phi3:latest".to_string();
-    let prompt = format!("Analyze the provided information and categorize it into relevant tags as an array (minimum 10 tags). Your response should focus solenly on tagging based on both textual content and visual data presented in the screenshots, excluding any other unrelated details or actions. text content: {text}");
+    let prompt = format!("Analyze the provided information and categorize it into relevant tags as an array (min 10 tags, max 20 tags). Your response should focus solenly on tagging based on both textual content and visual data presented in the screenshots, excluding any other unrelated details or actions. text content: {text}");
 
     let req = GenerationRequest::new(model, prompt);
     let res = ollama.generate(req.images(images)).await;
 
-    let text = match res {
-        Ok(res) => {
-            let response = res.response;
-            format!("clipboard-text: {text}\nAI:\n{response}")
-        }
+    let tags = match res {
+        Ok(res) => res.response,
         Err(e) => format!("Error: {e}"),
     };
-    Ok(text)
+
+    println!("{}", tags);
+
+    let mut store = StoreBuilder::new(app_handle, "clipboardHistory.json".into()).build();
+
+    // If there are no saved settings yet, this will return an error so we ignore the return value.
+    let _ = store.load();
+
+    let clipboard_history = ClipboardHistory::load_from_store(&store);
+
+    match clipboard_history {
+        Ok(clipboard_history) => {
+            let mut text_with_related_tags = clipboard_history.text_with_related_tags.clone();
+
+            let tags_vec: Vec<Value> = serde_json::from_str(&tags).unwrap();
+            text_with_related_tags.insert(text.to_string(), tags_vec.clone());
+            let _ = store.insert(
+                "clipboardHistory.text_with_related_tags".to_string(),
+                json!(text_with_related_tags),
+            );
+
+            let _ = store.save();
+
+            println!("text_with_related_tags {} {:?}", text, tags_vec);
+
+            Ok(tags)
+        }
+        Err(err) => {
+            eprintln!("Error loading settings: {}", err);
+            // Handle the error case if needed
+            Err(err.to_string()) // Convert the error to a Box<dyn Error> and return Err(err) here
+        }
+    }
 }
 
 fn main() {
-    env::set_var("OPENAI_API_BASE_URL", "http://localhost:11434/v1");
-    env::set_var("OPENAI_API_KEY", "ollama");
-
     tauri::Builder::default()
         .plugin(tauri_plugin_clipboard::init())
+        .plugin(tauri_plugin_store::Builder::default().build())
         .invoke_handler(tauri::generate_handler![greet, handle_copy])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
